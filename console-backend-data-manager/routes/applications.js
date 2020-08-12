@@ -96,6 +96,24 @@ module.exports = function(express, logger, config, Q, HTTP, isAuthenticated) {
 
     return deferred.promise;
   }
+  /* Get application status from Kubectl */ 
+  function getApplicationState(id) {
+    var deferred = Q.defer();
+    var url = config.deployment_manager.host + config.deployment_manager.API.applications + "/" + id + "/state";
+    logger.debug("get application kubectl status:", url);
+    HTTP.request({ url: url }).then(function successCallback(res) {
+      return res.body.read().then(function(bodyStream) {
+        var body = bodyStream.toString('UTF-8');
+        return deferred.resolve(body);
+      });
+    }, function errorCallback(error) {
+      logger.error("get application kubectl state error response", error);
+      deferred.reject('error ' + error);
+    });
+
+    return deferred.promise;
+  }
+
    /* XXX */
 
   /* GET Application listing. */
@@ -208,6 +226,22 @@ module.exports = function(express, logger, config, Q, HTTP, isAuthenticated) {
   router.get('/:id/log', isAuthenticated, function(req, res) {
     var id = req.params.id;
     var promise = Q.all([getApplicationLog(id)]);
+    promise.then(function(results) {
+      var details = {};
+      try {
+        details = JSON.parse(results[0]);
+      } catch (e) {
+        logger.error("invalid results", results[0]);
+      }
+
+      res.json(details);
+    });
+  });
+
+  /* GET Application state by id from kubectl. */
+  router.get('/:id/state', isAuthenticated, function(req, res) {
+    var id = req.params.id;
+    var promise = Q.all([getApplicationState(id)]);
     promise.then(function(results) {
       var details = {};
       try {
